@@ -47,32 +47,61 @@ instance = [
 
 #print(crosses_win_possible(instance, 4))
 
-def white_win_possible(black_positions, size):
-    solver = z3.Solver()
+def white_win_possible_formula(black_positions, size):
+    asserts = []
 
-    f = z3.Function("f", z3.BitVecSort(4), z3.BitVecSort(4), z3.BitVecSort(2))
+    f = z3.Function("f", z3.BitVecSort(4), z3.BitVecSort(4), z3.BoolSort())
     for x, y in black_positions:
-        solver.add(f(x, y) == 1)
+        asserts.append(f(x, y) == False)
 
     row_y = z3.BitVec("row_y", 4)
     inc_x = z3.BitVec("inc_x", 4)
-    row = z3.ForAll(inc_x, z3.Or(z3.UGE(inc_x, size), f(inc_x, row_y) == 0))
-    solver.add(z3.ULT(row_y, 3))
+    row = z3.ForAll(inc_x, z3.Or(z3.UGE(inc_x, size), f(inc_x, row_y) == True))
+    asserts.append(z3.ULT(row_y, 3))
     
     col_x = z3.BitVec("col_x", 4)
     inc_y = z3.BitVec("inc_y", 4)
-    col = z3.ForAll(inc_y, z3.Or(z3.UGE(inc_y, size), f(col_x, inc_y) == 0))
-    solver.add(z3.ULT(col_x, 3))
+    col = z3.ForAll(inc_y, z3.Or(z3.UGE(inc_y, size), f(col_x, inc_y) == True))
+    asserts.append(z3.ULT(col_x, 3))
 
     diag = z3.BitVec("diag", 4)
-    diag_1 = z3.ForAll(diag, z3.Or(z3.UGE(diag, size), f(diag, diag) == 0)) 
-    diag_2 = z3.ForAll(diag, z3.Or(z3.UGE(diag, size), f(size - 1 - diag, diag) == 0)) 
+    diag_1 = z3.ForAll(diag, z3.Or(z3.UGE(diag, size), f(diag, diag) == True)) 
+    diag_2 = z3.ForAll(diag, z3.Or(z3.UGE(diag, size), f(size - 1 - diag, diag) == True)) 
 
-    solver.add(z3.Or(row, col, diag_1, diag_2))
+    asserts.append(z3.Or(row, col, diag_1, diag_2))
+
+    return z3.And(asserts), f
+
+
+def white_win_possible(black_positions, size):
+    solver = z3.Solver()
+
+    formula, _ = white_win_possible_formula(black_positions, size)
+    solver.add(formula)
 
     if solver.check() == z3.sat:
         print(solver.model())
     else:
         print("Not possible")
 
-white_win_possible([(0, 1), (1, 2), (2, 3), (3, 0)], 4)
+
+
+def white_win_possible_for_all_black_moves(black_positions, size):
+    def helper(x, y):
+        state, f = white_win_possible_formula(black_positions,size)
+        return z3.And(state, f(x, y))
+    solver = z3.Solver()
+    
+    new_x = z3.BitVec("new_x", 4)
+    new_y = z3.BitVec("new_y", 4)
+    state, f = white_win_possible_formula(black_positions,size)
+    formula = z3.ForAll(new_x, z3.Or(z3.UGE(new_x, size), z3.ForAll(new_y, z3.Or(z3.UGE(new_y, size), z3.And(state, f(new_x, new_y) == False)))))
+    solver.add(formula)
+
+    if solver.check() == z3.sat:
+        print(solver.model())
+    else:
+        print("Not possible")
+    
+
+white_win_possible_for_all_black_moves([(0, 0), (1, 2)], 3)
