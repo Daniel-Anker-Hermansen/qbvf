@@ -4,16 +4,11 @@ def gen_contains(positions, x, y):
     return Or([And(x == x0, y == y0) for (x0, y0) in positions])
 
 def gen_has_won(positions):
-    row_x = BitVec("row_x", 2)
-    row_y = BitVec("row_y", 2)
-    row_win = Exists(row_y, ForAll(row_x, Implies(ULT(row_x, 3), gen_contains(positions, row_x, row_y))))
-    col_x = BitVec("col_x", 2)
-    col_y = BitVec("col_y", 2)
-    col_win = Exists(col_x, ForAll(col_y, Implies(ULT(col_y, 3), gen_contains(positions, col_x, col_y))))
-    diag = BitVec("diag", 2)
-    diag_1a = ForAll(diag, Implies(ULT(diag, 3), gen_contains(positions, diag, diag)))
-    diag_2a = ForAll(diag, Implies(ULT(diag, 3), gen_contains(positions, 2 - diag, diag)))
-    return Or(row_win, col_win, diag_1a, diag_2a)
+    rows = Or([And([gen_contains(positions, x, y) for x in range(3)]) for y in range(3)])
+    cols = Or([And([gen_contains(positions, x, y) for y in range(3)]) for x in range(3)])
+    diag_1 = And([gen_contains(positions, x, x) for x in range(3)])
+    diag_2 = And([gen_contains(positions, 3 - 1 - x, x) for x in range(3)])
+    return Or(rows, cols, diag_1, diag_2)
 
 def gen_white_has_won(whites, blacks):
     black_won = gen_has_won(blacks)
@@ -33,7 +28,7 @@ def gen_white_move(whites, blacks, depth):
     if depth == 0:
         return Exists([x, y], And(not_duplicate, gen_has_won(whites)))
     else:
-        return Exists([x, y], And(not_duplicate, gen_black_move(whites, blacks, depth - 1)))
+        return Exists([x, y], And(not_duplicate, Or(gen_has_won(whites), gen_black_move(whites, blacks, depth - 1))))
 
 def gen_black_move(whites, blacks, depth):
     x = BitVec(f"bx{depth}", 2)
@@ -44,7 +39,13 @@ def gen_black_move(whites, blacks, depth):
     return ForAll([x, y], body)
 
 
-whites = [(0, 0), (2, 2)]
+whites = []
 blacks = []
 
-solve(gen_black_move(whites, blacks, 1))
+formula = gen_white_move(whites, blacks, 3)
+
+solver = Solver()
+solver.add(formula)
+
+print(solver.check())
+print(solver.model())
