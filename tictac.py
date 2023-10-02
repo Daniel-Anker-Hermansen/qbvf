@@ -1,4 +1,5 @@
 from z3 import *
+import time
 
 def gen_contains(positions, x, y):
     return Or([And(x == x0, y == y0) for (x0, y0) in positions])
@@ -38,14 +39,20 @@ def gen_black_move(whites, blacks, depth):
     body = Implies(not_duplicate, And(Not(gen_has_won(blacks)), gen_white_move(whites, blacks, depth)))
     return ForAll([x, y], body)
 
-
 whites = []
 blacks = []
 
 formula = gen_white_move(whites, blacks, 3)
 
-solver = Solver()
+now = time.time()
+
+solver = Then("simplify", "smt").solver()
+#solver = Solver()
 solver.add(formula)
 
 print(solver.check())
-print(solver.model())
+
+elapsed = time.time() - now
+
+print(elapsed)
+
