@@ -22,29 +22,51 @@ def gen_is_not_duplicate(whites, blacks, x, y):
     return Not(Or(white_duplicate, black_duplicates))
 
 def gen_white_move(whites, blacks, depth):
-    x = BitVec(f"wx{depth}", 2)
-    y = BitVec(f"wy{depth}", 2)
-    not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
-    whites.append((x, y))
-    if depth == 0:
-        return Exists([x, y], And(not_duplicate, gen_has_won(whites)))
+    if depth >= 1:
+        x = BitVec(f"wx{depth}", 2)
+        y = BitVec(f"wy{depth}", 2)
+        not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
+        whites.append((x, y))
+        if depth == 0:
+            return Exists([x, y], And(not_duplicate, gen_has_won(whites)))
+        else:
+            return Exists([x, y], And(not_duplicate, Or(gen_has_won(whites), gen_black_move(whites, blacks, depth - 1))))
     else:
-        return Exists([x, y], And(not_duplicate, Or(gen_has_won(whites), gen_black_move(whites, blacks, depth - 1))))
+        cases = []
+        for x in range(3):
+            for y in range(3):
+                not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
+                whites.append((x, y))
+                body = And(not_duplicate, gen_has_won(whites)) if depth == 0 else And(not_duplicate, Or(gen_has_won(whites), gen_black_move(whites, blacks, depth - 1)))
+                whites.pop()
+                cases.append(body)
+        return Or(cases)
 
 def gen_black_move(whites, blacks, depth):
-    x = BitVec(f"bx{depth}", 2)
-    y = BitVec(f"by{depth}", 2)
-    not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
-    blacks.append((x, y))
-    body = Implies(not_duplicate, And(Not(gen_has_won(blacks)), gen_white_move(whites, blacks, depth)))
-    return ForAll([x, y], body)
+    if depth >= 1:
+        x = BitVec(f"bx{depth}", 2)
+        y = BitVec(f"by{depth}", 2)
+        not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
+        blacks.append((x, y))
+        body = Implies(not_duplicate, And(Not(gen_has_won(blacks)), gen_white_move(whites, blacks, depth)))
+        return ForAll([x, y], body)
+    else:
+        cases = []
+        for x in range(3):
+            for y in range(3):
+                not_duplicate = gen_is_not_duplicate(whites, blacks, x, y)
+                blacks.append((x, y))
+                body = Implies(not_duplicate, And(Not(gen_has_won(blacks)), gen_white_move(whites, blacks, depth)))
+                blacks.pop()
+                cases.append(body)
+        return And(cases)
 
 whites = []
 blacks = []
 
-formula = gen_white_move(whites, blacks, 3)
-
 now = time.time()
+
+formula = gen_white_move(whites, blacks, 4)
 
 solver = Then("simplify", "smt").solver()
 #solver = Solver()
