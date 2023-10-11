@@ -25,7 +25,7 @@ def gen_white_move(whites, blacks, depth):
     if depth >= 1:
         x = BitVec(f"wx{depth}", 2)
         y = BitVec(f"wy{depth}", 2)
-        not_duplicate = And(gen_is_not_duplicate(whites, blacks, x, y), ULE(x, 3), ULE(y, 3))
+        not_duplicate = And(gen_is_not_duplicate(whites, blacks, x, y), ULE(x, 2), ULE(y, 2))
         whites.append((x, y))
         if depth == 0:
             return Exists([x, y], And(not_duplicate, gen_has_won(whites)))
@@ -46,7 +46,7 @@ def gen_black_move(whites, blacks, depth):
     if depth >= 1:
         x = BitVec(f"bx{depth}", 2)
         y = BitVec(f"by{depth}", 2)
-        not_duplicate = And(gen_is_not_duplicate(whites, blacks, x, y), ULE(x, 3), ULE(y, 3))
+        not_duplicate = And(gen_is_not_duplicate(whites, blacks, x, y), ULE(x, 2), ULE(y, 2))
         blacks.append((x, y))
         body = Implies(not_duplicate, And(Not(gen_has_won(blacks)), gen_white_move(whites, blacks, depth)))
         return ForAll([x, y], body)
@@ -61,13 +61,14 @@ def gen_black_move(whites, blacks, depth):
                 cases.append(body)
         return And(cases)
 
-whites = [(0, 0)]
-blacks = [(0, 2)]
+whites = []
+blacks = []
 
 now = time.time()
 
 formula = gen_white_move(whites, blacks, 4)
 
+print(time.time() - now)
 solver = Then("simplify", "elim-small-bv", "smt").solver()
 #solver = Solver()
 solver.add(formula)
