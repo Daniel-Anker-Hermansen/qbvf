@@ -1,65 +1,151 @@
 use std::iter::repeat;
 
-use z3::{Context, ast::{BV, Bool, Ast}};
+use z3::{Context, ast::{BV, Bool, Ast, Dynamic}, FuncDecl, Sort, DatatypeBuilder, DatatypeSort};
 
-use crate::bddl::{InitPred, Pred, SubCondition, Size, Condition};
+use crate::bddl::{InitPred, Pred, SubCondition, Size, Condition, Problem, Domain};
 
-type Pieces<'ctx> = [(BV<'ctx>, BV<'ctx>)];
-
-fn gen_contains<'ctx>(ctx: &'ctx Context, pieces: &Pieces<'ctx>, x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {
-    let terms: Vec<_> = pieces.iter().map(|(x_, y_)| Bool::and(ctx, &[&x_._eq(x), &y_._eq(y)])).collect();
-    let terms: Vec<_> = terms.iter().collect();
-    Bool::or(ctx, &terms)
+struct Solver<'ctx> {
+    ctx: &'ctx Context,
+    pred_datatype: DatatypeSort<'ctx>,
+    open: Dynamic<'ctx>,
+    white: Dynamic<'ctx>,
+    black: Dynamic<'ctx>,
+    problem: &'ctx Problem,
+    domain: &'ctx Domain,
+    x_sz: u32,
+    y_sz: u32,
+    size: Size,
+    board: Vec<(BV<'ctx>, BV<'ctx>, Dynamic<'ctx>)>,
 }
 
-fn gen_pred<'ctx>(ctx: &'ctx Context, whites: &Pieces<'ctx>, blacks: &Pieces<'ctx>, pred: Pred, x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {
-    match pred {
-        Pred::Open => Bool::or(ctx, &[&gen_contains(ctx, whites, x, y), &gen_contains(ctx, blacks, x, y)]).not(),
-        Pred::White => gen_contains(ctx, whites, x, y),
-        Pred::Black => gen_contains(ctx, blacks, x, y),
+impl<'ctx> Solver<'ctx> {
+    fn new(ctx: &'ctx Context, problem: &'ctx Problem, domain: &'ctx Domain) -> Solver<'ctx> {
+        let pred_datatype = DatatypeBuilder::new(ctx, "Pred")
+            .variant("Open", Vec::new())
+            .variant("White", Vec::new())
+            .variant("Black", Vec::new())
+            .finish();
+        let open = pred_datatype.variants[0].constructor.apply(&[]);
+        let white = pred_datatype.variants[1].constructor.apply(&[]);
+        let black = pred_datatype.variants[2].constructor.apply(&[]);
+        let x_sz = (2 * problem.size.x - 1).ilog2();
+        let y_sz = (2 * problem.size.y - 1).ilog2();
+        let board = Vec::new();
+        let size = problem.size;
+        Solver {
+            ctx,
+            pred_datatype,
+            open,
+            white,
+            black,
+            problem,
+            domain,
+            x_sz,
+            y_sz,
+            size,
+            board,
+        }
     }
-}
 
-// Returns none if it causes out of bounds
-fn gen_subcondition<'ctx>(ctx: &'ctx Context, whites: &Pieces<'ctx>, blacks: &Pieces<'ctx>, sub_condition: &SubCondition, size: Size, x: i64, y: i64) -> Option<Bool<'ctx>> {
-    match *sub_condition {
-        SubCondition::Id { pred, x_e, y_e } => {
-            let x = x_e.noramlize(x, size.x);
-            let y = y_e.noramlize(y, size.y);
-            if x < 0 || x >= size.x || y < 0 || y >= size.y {
-                None
+    fn pred_to_z3(&self, pred: Pred) -> &Dynamic<'ctx> {
+        match pred {
+            Pred::Open => &self.open,
+            Pred::White => &self.white,
+            Pred::Black => &self.black,
+        }
+    }
+
+    fn gen_pred_assert(&self, x: &BV<'ctx>, y: &BV<'ctx>, pred: Pred) -> Bool<'ctx> {
+        fn helper<'ctx>(this: &Solver<'ctx>, x: &BV<'ctx>, y: &BV<'ctx>, pred: Pred, board: &[(BV<'ctx>, BV<'ctx>, Dynamic<'ctx>)]) -> Bool<'ctx> {
+            if board.is_empty() {
+                match pred {
+                    Pred::Open => Bool::from_bool(&this.ctx, true),
+                    _ => Bool::from_bool(&this.ctx, false),
+                }
             }
             else {
-                let x = BV::from_i64(ctx, x, 32);
-                let y = BV::from_i64(ctx, y, 32);
-                Some(gen_pred(ctx, whites, blacks, pred, &x, &y))
+                let (hx, hy, hp) = board.last().unwrap();
+                let p = this.pred_to_z3(pred);
+                let tail = helper(this, x, y, pred, &board[..board.len() - 1]);
+                let xe = x._eq(hx);
+                let ye = y._eq(hy);
+                let pe = p._eq(hp);
+                let matche = Bool::and(&this.ctx, &[&xe, &ye, &pe]);
+                let nmatche = Bool::and(&this.ctx, &[&xe, &ye, &pe.not()]);
+                let alt = Bool::and(&this.ctx, &[&nmatche.not(), &tail]);
+                Bool::or(&this.ctx, &[&matche, &alt])
             }
-        },
-        SubCondition::Not { pred, x_e, y_e } => gen_subcondition(ctx, whites, blacks, &SubCondition::Id { pred, x_e, y_e }, size,x , y).map(|b| b.not()),
+        }
+        helper(self, x, y, pred, &self.board)
     }
-}
 
-fn gen_condition<'ctx>(ctx: &'ctx Context, whites: &Pieces<'ctx>, blacks: &Pieces<'ctx>, condition: &Condition, size: Size, x: i64, y: i64) -> Bool<'ctx> {
-    let sub_conditions: Vec<_> = condition.sub_cond.iter()
-        .filter_map(|sub_condition| gen_subcondition(ctx, whites, blacks, sub_condition, size, x, y))
-        .collect();
-    Bool::and(ctx, &sub_conditions.iter().collect::<Vec<_>>())
-}
+    fn gen_subcondition(&self, sub_condition: SubCondition, x: i64, y: i64) -> Option<Bool<'ctx>> {
+        match sub_condition {
+            SubCondition::Id { pred, x_e, y_e } => {
+                let x = x_e.noramlize(x, self.size.x);
+                let y = y_e.noramlize(y, self.size.y);
+                if x < 0 || x >= self.size.x || y < 0 || y >= self.size.y {
+                    None
+                }
+                else {
+                    let x = BV::from_i64(self.ctx, x, self.x_sz);
+                    let y = BV::from_i64(self.ctx, y, self.y_sz);
+                    Some(self.gen_pred_assert(&x, &y, pred))
+                }
+            },
+            SubCondition::Not { pred, x_e, y_e } => self.gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y).map(|b| b.not()),
+        }
+    }
 
-fn gen_goals<'ctx>(ctx: &'ctx Context, whites: &Pieces<'ctx>, blacks: &Pieces<'ctx>, conditions: &[Condition], size: Size) -> Bool<'ctx> {
-    let ors: Vec<_> = (0..size.x).flat_map(|x| repeat(x).zip(0..size.y))
-        .flat_map(|(x, y)| {
-            conditions.iter()
-                .map(move |condition| gen_condition(ctx, whites, blacks, condition, size, x, y))
-        })
-        .collect();
-        Bool::or(ctx, &ors.iter().collect::<Vec<_>>())
-}
+    fn gen_condition(&self, condition: &Condition, x: i64, y: i64) -> Option<Bool<'ctx>> {
+        let all = condition.sub_cond.iter()
+            .map(|sub_condition| self.gen_subcondition(*sub_condition, x, y))
+            .collect::<Option<Vec<Bool<'ctx>>>>()?;
+        Some(Bool::and(self.ctx, &all.iter().collect::<Vec<&Bool<'ctx>>>()))
+    }
 
-fn effect_action<'ctx>(ctx: &'ctx Context, whites: &Pieces<'ctx>, blacks: &Pieces<'ctx>) {
-    // We can get into a situation where we need to set an existing value to something else, this
-    // requires that we remove it from the list but we do not know which it is because it is
-    // symbolic so we cannot use lists for games which allow this. I have to think about how to fix
-    // this. Maybe use function shadowing although i am worried about performace regarding that.
-    todo!()
+    fn gen_goals(&self, goals: &[Condition]) -> Bool<'ctx> {
+        let ors: Vec<_> = (0..self.size.x).flat_map(|x| repeat(x).zip(0..self.size.y))
+            .flat_map(|(x, y)| {
+                goals.iter()
+                    .filter_map(move |condition| self.gen_condition(condition, x, y))
+            })
+            .collect();
+        Bool::or(self.ctx, &ors.iter().collect::<Vec<&Bool<'ctx>>>())
+    }
+
+    fn effect_action(&mut self, effect: &Condition, x: i64, y: i64) {
+        for subcondition in &effect.sub_cond {
+            match subcondition {
+                SubCondition::Id { pred, x_e, y_e } => {
+                    let x = x_e.noramlize(x, self.size.x);
+                    let y = y_e.noramlize(y, self.size.y);
+                    let p = self.pred_to_z3(*pred).clone();
+                    let x = BV::from_i64(self.ctx, x, self.x_sz);
+                    let y = BV::from_i64(self.ctx, y, self.y_sz);
+                    self.board.push((x, y, p));
+                },
+                SubCondition::Not { .. } => panic!("Not cannot be used in effect"),
+            }
+        }
+    }
+
+    fn solve_black(&mut self, depth: u64) -> Bool<'ctx> {
+        if depth == 0 {
+            return Bool::from_bool(&self.ctx, false);
+        }
+        let ors = self.domain.black_actions.iter().map(|action| {
+            // It still does not work. How are we supposed to encode the predicates???
+        });
+
+        unimplemented!()
+    }
+    
+    fn solve_white(&mut self, depth: u64) -> Bool<'ctx> {
+        if depth == 0 {
+            return Bool::from_bool(&self.ctx, false);
+        }
+
+        unimplemented!()
+    }
 }

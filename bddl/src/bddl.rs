@@ -10,7 +10,7 @@ impl Condition {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum SubCondition {
     Id {
         pred: Pred,
@@ -64,7 +64,7 @@ impl E {
             E::Sub(u) => v - u,
             E::Identity => v,
             E::Min => 0,
-            E::Max => max,
+            E::Max => max - 1,
         }
     }
 }
