@@ -7,6 +7,7 @@
 mod bddl;
 mod tictac;
 mod solver;
+mod solver_z3;
 /*
 fn gen_contains<'ctx>(ctx: &'ctx Context, pieces: &[(BV<'ctx>, BV<'ctx>)], x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {
     let terms: Vec<_> = pieces.iter().map(|(x_, y_)| Bool::and(ctx, &[&x_._eq(x), &y_._eq(y)])).collect();
@@ -115,5 +116,7 @@ fn main() {
     dbg!(solver.check());
     dbg!(solver.get_model());
     println!("{:?}", now.elapsed());*/
+    let now = std::time::Instant::now();
     dbg!(solver::solve(&tictac::problem(), &tictac::domain()));
+    println!("{:?}", now.elapsed());
 }

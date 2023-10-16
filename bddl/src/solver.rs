@@ -2,16 +2,6 @@ use std::iter::repeat;
 
 use super::bddl::*;
 
-fn e_noramlize(e: &E, v: i64, max: i64) -> i64 {
-    match e {
-        E::Add(u) => v + u,
-        E::Sub(u) => v - u,
-        E::Identity => v,
-        E::Min => 0,
-        E::Max => max,
-    }
-}
-
 #[derive(Debug, Clone)]
 struct Board {
     preds: Vec<Vec<Pred>>,
@@ -34,8 +24,8 @@ impl Board {
     fn assert_condition(&self, condition: &Condition, x: i64, y: i64) -> bool {
         condition.sub_cond.iter().all(|cond| {
             match cond {
-                SubCondition::Id { pred, x_e, y_e } => self.assert_pred(e_noramlize(x_e, x, self.size.x), e_noramlize(y_e, y, self.size.y), *pred),
-                SubCondition::Not { pred, x_e, y_e } => self.assert_not_pred(e_noramlize(x_e, x, self.size.x), e_noramlize(y_e, y, self.size.y), *pred),
+                SubCondition::Id { pred, x_e, y_e } => self.assert_pred(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
+                SubCondition::Not { pred, x_e, y_e } => self.assert_not_pred(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
             }
         })
     }
@@ -43,7 +33,7 @@ impl Board {
     fn effect_conditon(&mut self, condition: &Condition, x: i64, y: i64) {
         condition.sub_cond.iter().for_each(|cond| {
             match cond {
-                SubCondition::Id { pred, x_e, y_e } => self.effect(e_noramlize(x_e, x, self.size.x), e_noramlize(y_e, y, self.size.y), *pred),
+                SubCondition::Id { pred, x_e, y_e } => self.effect(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
                 SubCondition::Not { .. } => panic!("Cannot use not subcondition in effect"), 
             };
         })

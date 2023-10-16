@@ -48,13 +48,25 @@ impl Pred {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum E {
     Add(i64),
     Sub(i64),
     Identity,
     Min,
     Max,
+}
+
+impl E {
+    pub fn noramlize(&self, v: i64, max: i64) -> i64 {
+        match self {
+            E::Add(u) => v + u,
+            E::Sub(u) => v - u,
+            E::Identity => v,
+            E::Min => 0,
+            E::Max => max,
+        }
+    }
 }
 
 #[derive(Debug)]
