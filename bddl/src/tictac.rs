@@ -1,0 +1,70 @@
+use super::bddl::*;
+
+pub fn domain() -> Domain {
+    let black_actions = Action {
+        name: "fill".to_owned(),
+        precondition: Condition {
+            sub_cond: vec![SubCondition::Id { pred: Pred::Open, x_e: E::Identity, y_e: E::Identity }],
+        },
+        effect: Condition {
+            sub_cond: vec![SubCondition::Id { pred: Pred::Black, x_e: E::Identity, y_e: E::Identity }],
+        },
+    };
+    let white_actions = Action {
+        name: "fill".to_owned(),
+        precondition: Condition {
+            sub_cond: vec![SubCondition::Id { pred: Pred::Open, x_e: E::Identity, y_e: E::Identity }],
+        },
+        effect: Condition {
+            sub_cond: vec![SubCondition::Id { pred: Pred::White, x_e: E::Identity, y_e: E::Identity }],
+        },
+    };
+    Domain {
+        black_actions: vec![black_actions],
+        white_actions: vec![white_actions],
+    }
+}
+
+fn goals(pred: Pred) -> Vec<Condition> {
+    let horizontal = Condition {
+        sub_cond: vec![
+            SubCondition::Id { pred, x_e: E::Sub(1), y_e: E::Identity },
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Identity },
+            SubCondition::Id { pred, x_e: E::Add(1), y_e: E::Identity },
+        ],
+    };
+    let vertical = Condition {
+        sub_cond: vec![
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Sub(1) },
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Identity },
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Add(1) },
+        ],
+    };
+    let diag_1 = Condition {
+        sub_cond: vec![
+            SubCondition::Id { pred, x_e: E::Sub(1), y_e: E::Sub(1) },
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Identity },
+            SubCondition::Id { pred, x_e: E::Add(1), y_e: E::Add(1) },
+        ],
+    };
+    let diag_2 = Condition {
+        sub_cond: vec![
+            SubCondition::Id { pred, x_e: E::Add(1), y_e: E::Sub(1) },
+            SubCondition::Id { pred, x_e: E::Identity, y_e: E::Identity },
+            SubCondition::Id { pred, x_e: E::Sub(1), y_e: E::Add(1) },
+        ],
+    };
+    vec![horizontal, vertical, diag_1, diag_2]
+}
+
+pub fn problem() -> Problem {
+    let size = Size { x: 3, y: 3 };
+
+    Problem {
+        size,
+        init: vec![InitPred { pred: Pred::Black, x: 1, y: 1 }, InitPred { pred: Pred::White, x: 1, y: 2 }],
+        depth: 7,
+        white_goals: goals(Pred::White),
+        black_goals: goals(Pred::Black),
+    }
+}

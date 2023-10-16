@@ -1,6 +1,6 @@
 #[derive(Debug)]
 pub struct Condition {
-    sub_cond: Vec<SubCondition>,
+    pub sub_cond: Vec<SubCondition>,
 }
 
 impl Condition {
@@ -30,7 +30,7 @@ impl SubCondition {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pred {
     Open,
     White,
@@ -50,8 +50,8 @@ impl Pred {
 
 #[derive(Debug)]
 pub enum E {
-    Add(u64),
-    Sub(u64),
+    Add(i64),
+    Sub(i64),
     Identity,
     Min,
     Max,
@@ -59,24 +59,24 @@ pub enum E {
 
 #[derive(Debug)]
 pub struct Domain {
-    black_actions: Vec<Action>,
-    white_actions: Vec<Action>,
+    pub black_actions: Vec<Action>,
+    pub white_actions: Vec<Action>,
 }
 
 #[derive(Debug)]
 pub struct Action {
-    name: String,
-    precondition: Condition,
-    effect: Condition,
+    pub name: String,
+    pub precondition: Condition,
+    pub effect: Condition,
 }
 
 #[derive(Debug)]
 pub struct Problem {
-    size: Size,
-    init: Vec<InitPred>,
-    depth: u64,
-    white_goals: Vec<Condition>,
-    black_goals: Vec<Condition>,
+    pub size: Size,
+    pub init: Vec<InitPred>,
+    pub depth: u64,
+    pub white_goals: Vec<Condition>,
+    pub black_goals: Vec<Condition>,
 }
 
 impl Problem {
@@ -97,10 +97,10 @@ impl Problem {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Size {
-    x: u64,
-    y: u64,
+    pub x: i64,
+    pub y: i64,
 }
 
 impl Size {
@@ -114,9 +114,9 @@ impl Size {
 
 #[derive(Debug)]
 pub struct InitPred {
-    pred: Pred,
-    x: u64,
-    y: u64,
+    pub pred: Pred,
+    pub x: i64,
+    pub y: i64,
 }
 
 impl InitPred {

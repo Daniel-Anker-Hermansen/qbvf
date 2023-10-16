@@ -1,11 +1,13 @@
-use std::iter::{repeat, once};
+//use std::iter::{repeat, once};
 
-use z3::{Context, ast::{Bool, BV, Ast, exists_const, forall_const}, Tactic};
+//use z3::{Context, ast::{Bool, BV, Ast, exists_const, forall_const}, Tactic};
 
-use crate::bddl::Problem;
+//use crate::bddl::Problem;
 
 mod bddl;
-
+mod tictac;
+mod solver;
+/*
 fn gen_contains<'ctx>(ctx: &'ctx Context, pieces: &[(BV<'ctx>, BV<'ctx>)], x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {
     let terms: Vec<_> = pieces.iter().map(|(x_, y_)| Bool::and(ctx, &[&x_._eq(x), &y_._eq(y)])).collect();
     let terms: Vec<_> = terms.iter().collect();
@@ -91,9 +93,9 @@ fn gen_black_move<'ctx>(ctx: &'ctx Context, whites: &mut Vec<(BV<'ctx>, BV<'ctx>
     let body = Bool::or(ctx, &[&x_le, &y_le, &not_duplicate]).implies(&Bool::and(ctx, &[&has_not_won, &white_will_win]));
     forall_const(ctx, &[&x, &y], &[], &body)
 }
-
+*/
 fn main() {
-    let problem = Problem::parse("hi");
+    /*let problem = Problem::parse("hi");
     let now = std::time::Instant::now();
     let ctx = Context::new(&Default::default());
     let mut whites = Vec::new();
@@ -106,11 +108,12 @@ fn main() {
     //whites.push((c0.clone(), c2.clone()));
     //blacks.push((c0.clone(), c0.clone()));
     //blacks.push((c1.clone(), c0.clone()));
-    //blacks.push((c2.clone(), c0.clone()));*/
+    //blacks.push((c2.clone(), c0.clone()));
     let formula = gen_first_move(&ctx, &mut whites, &mut blacks, 4);
     let solver = Tactic::new(&ctx, "simplify").and_then(&Tactic::new(&ctx, "elim-small-bv")).and_then(&Tactic::new(&ctx, "smt")).solver();
     solver.assert(&formula);
     dbg!(solver.check());
     dbg!(solver.get_model());
-    println!("{:?}", now.elapsed());
+    println!("{:?}", now.elapsed());*/
+    dbg!(solver::solve(&tictac::problem(), &tictac::domain()));
 }
