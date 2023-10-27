@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Condition {
     pub sub_cond: Vec<SubCondition>,
 }
@@ -75,7 +75,7 @@ pub struct Domain {
     pub white_actions: Vec<Action>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Action {
     pub name: String,
     pub precondition: Condition,

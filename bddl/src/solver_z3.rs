@@ -1,6 +1,6 @@
-use std::iter::repeat;
+use std::{iter::repeat, intrinsics::discriminant_value};
 
-use z3::{Context, ast::{BV, Bool, Ast, Dynamic}, FuncDecl, Sort, DatatypeBuilder, DatatypeSort};
+use z3::{Context, ast::{BV, Bool, Ast, Dynamic, exists_const}, FuncDecl, Sort, DatatypeBuilder, DatatypeSort};
 
 use crate::bddl::{InitPred, Pred, SubCondition, Size, Condition, Problem, Domain};
 
@@ -79,7 +79,7 @@ impl<'ctx> Solver<'ctx> {
         helper(self, x, y, pred, &self.board)
     }
 
-    fn gen_subcondition(&self, sub_condition: SubCondition, x: i64, y: i64) -> Option<Bool<'ctx>> {
+    fn gen_subcondition(&self, sub_condition: SubCondition, x: &BV<'ctx>, y: &BV<'ctx>) -> Option<Bool<'ctx>> {
         match sub_condition {
             SubCondition::Id { pred, x_e, y_e } => {
                 let x = x_e.noramlize(x, self.size.x);
@@ -97,7 +97,7 @@ impl<'ctx> Solver<'ctx> {
         }
     }
 
-    fn gen_condition(&self, condition: &Condition, x: i64, y: i64) -> Option<Bool<'ctx>> {
+    fn gen_condition(&self, condition: &Condition, x: &BV<'ctx>, y: &BV<'ctx>) -> Option<Bool<'ctx>> {
         let all = condition.sub_cond.iter()
             .map(|sub_condition| self.gen_subcondition(*sub_condition, x, y))
             .collect::<Option<Vec<Bool<'ctx>>>>()?;
@@ -134,11 +134,19 @@ impl<'ctx> Solver<'ctx> {
         if depth == 0 {
             return Bool::from_bool(&self.ctx, false);
         }
-        let ors = self.domain.black_actions.iter().map(|action| {
-            // It still does not work. How are we supposed to encode the predicates???
-        });
-
-        unimplemented!()
+        let black_actions = self.domain.black_actions.clone();
+        let size = self.size;
+        let ors: Vec<_> = black_actions.iter().map(|action| {
+            let x = BV::new_const(&self.ctx, "h", self.x_sz);
+            let y = BV::new_const(&self.ctx, "i", self.x_sz);
+            let valid = self.gen_condition(&action.precondition, x, y);
+            self.effect_action(&action.effect, x, y);
+            let wins = self.solve_white(depth - 1);
+            // remove the effect of the action
+            self.board.truncate(self.board.len() - action.effect.sub_cond.len());
+            exists_const(&self.ctx, &[&x, &y], &[], valid.and(wins))
+        }).collect();
+        Bool::or(&self.ctx, &ors.iter().collect::<Vec<&Bool>>())
     }
     
     fn solve_white(&mut self, depth: u64) -> Bool<'ctx> {
