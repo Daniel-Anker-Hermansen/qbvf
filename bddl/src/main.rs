@@ -7,7 +7,7 @@
 mod bddl;
 mod tictac;
 mod solver;
-//mod solver_z3;
+mod solver_z3;
 mod parser;
 /*
 fn gen_contains<'ctx>(ctx: &'ctx Context, pieces: &[(BV<'ctx>, BV<'ctx>)], x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {

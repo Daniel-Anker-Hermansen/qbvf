@@ -1,8 +1,64 @@
-use std::{iter::repeat, intrinsics::discriminant_value};
+use std::iter::repeat;
 
-use z3::{Context, ast::{BV, Bool, Ast, Dynamic, exists_const}, FuncDecl, Sort, DatatypeBuilder, DatatypeSort};
+use z3::{Context, ast::{BV, Bool, Ast, Dynamic, forall_const, Datatype, exists_const}, FuncDecl, Sort, DatatypeBuilder, DatatypeSort};
 
-use crate::bddl::{InitPred, Pred, SubCondition, Size, Condition, Problem, Domain};
+use crate::bddl::{InitPred, Pred, SubCondition, Size, Condition, Problem, Domain, E};
+
+fn gen_bounds_check<'ctx>(e: &E, v: &BV<'ctx>, max: i64) -> Bool<'ctx> {
+    match e {
+        E::Add(o) => v.bvule(&BV::from_i64(v.get_ctx(), max - o - 1, v.get_size())),
+        E::Sub(o) => v.bvuge(&BV::from_i64(v.get_ctx(), *o, v.get_size())),
+        _ => Bool::from_bool(v.get_ctx(), true),
+    }
+}
+
+fn gen_coor_bounds<'ctx>(ex: &E, ey: &E, size: Size, x: &BV<'ctx>, y: &BV<'ctx>) -> Bool<'ctx> {
+    Bool::and(x.get_ctx(), &[&gen_bounds_check(ex, x, size.x), &gen_bounds_check(ey, y, size.y)])
+}
+
+struct SymbolicBoard<'ctx> {
+    prefix: String,
+    symbols: Vec<Vec<Dynamic<'ctx>>>,
+}
+
+impl<'ctx> SymbolicBoard<'ctx> {
+    fn pred(&self, x: &BV<'ctx>, y: &BV<'ctx>, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
+        let all = (0..self.symbols.len()).flat_map(|x| repeat(x).zip(0..self.symbols[0].len()))
+            .map(|(xid, yid)| {
+                let xi = BV::from_i64(x.get_ctx(), xid as _, x.get_size());
+                let yi = BV::from_i64(y.get_ctx(), yid as _, y.get_size());
+                Bool::and(x.get_ctx(), &[&xi._eq(x), &yi._eq(y)]).implies(&self.symbols[xid][yid]._eq(pred))
+            })
+            .collect::<Vec<_>>();
+        Bool::and(x.get_ctx(), &all.iter().collect::<Vec<_>>())
+    }
+
+    fn static_pred(&self, x: i64, y: i64, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
+        self.symbols[x as usize][y as usize]._eq(pred)
+    }
+
+    fn init(initpreds: &[InitPred], size: Size, solver: &'ctx Solver) -> (Self, Bool<'ctx>) {
+        let symbols: Vec<Vec<Dynamic<'ctx>>> = (0..size.x)
+            .map(|x| (0..size.y).map(|y| Datatype::new_const(&solver.ctx, format!("x{}y{}", x, y), &solver.pred_datatype.sort).into()).collect())
+            .collect();
+        let all = (0..symbols.len()).flat_map(|x| repeat(x).zip(0..symbols[0].len()))
+            .map(|(xid, yid)| {
+                let pred = initpreds.iter().find(|i| i.x == xid as _ && i.y == yid as _);
+                let z3_pred = match pred {
+                    Some(v) => solver.pred_to_z3(v.pred),
+                    None => &solver.open,
+                };
+                symbols[xid][yid]._eq(z3_pred)
+            })
+            .collect::<Vec<_>>();
+
+        let this = Self {
+            prefix: String::new(),
+            symbols,
+        };
+        (this, Bool::and(&solver.ctx, &all.iter().collect::<Vec<_>>()))
+    }
+}
 
 struct Solver<'ctx> {
     ctx: &'ctx Context,
