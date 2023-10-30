@@ -30,7 +30,7 @@ struct Effect<'ctx> {
     x: &'ctx E,
     y: &'ctx E,
     pred: &'ctx Dynamic<'ctx>,
-    tp: i64,
+    tpe: i64,
 }
 
 struct SymbolicBoard<'ctx> {
@@ -51,9 +51,10 @@ impl<'ctx> SymbolicBoard<'ctx> {
         Bool::and(x.get_ctx(), &all.iter().collect::<Vec<_>>())
     }
 
-    fn static_pred(&self, x: i64, y: i64, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
-        self.symbols[x as usize][y as usize]._eq(pred)
-    }
+    //Maybe this can be used for optimization later.
+    //fn static_pred(&self, x: i64, y: i64, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
+    //    self.symbols[x as usize][y as usize]._eq(pred)
+    //}
 
     fn init(initpreds: &[InitPred], size: Size, solver: &'ctx Solver) -> (Self, Bool<'ctx>) {
         let symbols: Vec<Vec<Dynamic<'ctx>>> = (0..size.x)
@@ -78,14 +79,14 @@ impl<'ctx> SymbolicBoard<'ctx> {
         (this, Bool::and(&solver.ctx, &all.iter().collect::<Vec<_>>()))
     }
 
-    fn rec_effect(&self, effects: &[Effect<'ctx>], x: &BV<'ctx>, y: &BV<'ctx>, tpe: &BV<'ctx>, symbol: &Dynamic<'ctx>, xid: usize, yid: usize) -> Bool<'ctx> {
+    fn rec_effect(&self, effects: &[Effect<'ctx>], x: &BV<'ctx>, y: &BV<'ctx>, tpe: &BV<'ctx>, symbol: &Dynamic<'ctx>, xid: usize, yid: usize, size: Size) -> Bool<'ctx> {
         match effects {
             [] => self.symbols[xid][yid]._eq(symbol),
             [hd, ..] => {
-                let tpe_ = tpe._eq(&BV::from_i64(tpe.get_ctx(), hd.tp, tpe.get_size()));
+                let tpe_ = tpe._eq(&BV::from_i64(tpe.get_ctx(), hd.tpe, tpe.get_size()));
                 let x_ = e_to_bv(&hd.x, x, self.size.x)._eq(&BV::from_i64(x.get_ctx(), xid as _, x.get_size()));
                 let y_ = e_to_bv(&hd.y, y, self.size.x)._eq(&BV::from_i64(y.get_ctx(), yid as _, y.get_size()));
-                Bool::and(symbol.get_ctx(), &[&tpe_, &x_, &y_]).ite(&symbol._eq(&hd.pred), &self.rec_effect(&effects[1..], x, y, tpe, symbol, xid, yid))
+                Bool::and(symbol.get_ctx(), &[&gen_coor_bounds(&hd.x, &hd.y, size, x, y), &tpe_, &x_, &y_]).ite(&symbol._eq(&hd.pred), &self.rec_effect(&effects[1..], x, y, tpe, symbol, xid, yid, size))
             },
         }
     }
@@ -97,7 +98,7 @@ impl<'ctx> SymbolicBoard<'ctx> {
             .collect();
         let all = (0..symbols.len()).flat_map(|x| repeat(x).zip(0..symbols[0].len()))
             .map(|(xid, yid)| {
-                self.rec_effect(effects, x, y, tpe, &symbols[xid][yid], xid, yid)
+                self.rec_effect(effects, x, y, tpe, &symbols[xid][yid], xid, yid, solver.size)
             })
             .collect::<Vec<_>>();
         let b = Bool::and(x.get_ctx(), &all.iter().collect::<Vec<_>>());
@@ -164,7 +165,10 @@ impl<'ctx> Solver<'ctx> {
 
     fn gen_subcondition(&self, sub_condition: SubCondition, x: &BV<'ctx>, y: &BV<'ctx>, board: &SymbolicBoard<'ctx>) -> Bool<'ctx> {
         match sub_condition {
-            SubCondition::Id { pred, x_e, y_e } => self.gen_pred_assert(&e_to_bv(&x_e, x, self.size.x), &e_to_bv(&y_e, y, self.size.y), pred, board),
+            SubCondition::Id { pred, x_e, y_e } => {
+                let bounds = gen_coor_bounds(&x_e, &y_e, self.size, x, y);
+                Bool::and(self.ctx, &[&self.gen_pred_assert(&e_to_bv(&x_e, x, self.size.x), &e_to_bv(&y_e, y, self.size.y), pred, board), &bounds])
+            },
             SubCondition::Not { pred, x_e, y_e } => self.gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y, board).not(),
         }
     }
@@ -195,7 +199,7 @@ impl<'ctx> Solver<'ctx> {
             .enumerate().
             flat_map(|(idx, action)| action.effect.sub_cond.iter()
                 .map(move |cond| match cond {
-                    SubCondition::Id { pred, x_e, y_e } => Effect { x: x_e, y: y_e, pred: self.pred_to_z3(*pred), tp: idx as _ },
+                    SubCondition::Id { pred, x_e, y_e } => Effect { x: x_e, y: y_e, pred: self.pred_to_z3(*pred), tpe: idx as _ },
                     _ => panic!("Cannot not as an effect"),
                 })
             )
@@ -204,6 +208,7 @@ impl<'ctx> Solver<'ctx> {
     }
 
     fn solve_black(&'ctx self, board: &SymbolicBoard<'ctx>, depth: u64) -> Bool<'ctx> {
+        dbg!(&depth);
         if depth == 0 {
             return Bool::from_bool(&self.ctx, false);
         }
@@ -222,6 +227,8 @@ impl<'ctx> Solver<'ctx> {
             .collect::<Vec<_>>();
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
         let wins = self.solve_white(&new_board, depth - 1);
+        let goal = self.gen_goals(&self.problem.black_goals, &new_board);
+        let wins = Bool::or(self.ctx, &[&wins, &goal]);
         exists_const(&self.ctx, &[&x, &y, &tpe], &[], &Bool::and(self.ctx, &[&effect, &valid, &wins]))
     }
     
@@ -244,6 +251,8 @@ impl<'ctx> Solver<'ctx> {
             .collect::<Vec<_>>();
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
         let wins = self.solve_black(&new_board, depth - 1);
+        let goal = self.gen_goals(&self.problem.white_goals, &new_board);
+        let wins = Bool::or(self.ctx, &[&wins, &goal]);
         forall_const(&self.ctx, &[&x, &y, &tpe], &[], &Bool::and(self.ctx, &[&effect, &valid, &wins]).not())
     }
 }

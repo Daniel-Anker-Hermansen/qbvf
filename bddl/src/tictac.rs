@@ -59,7 +59,7 @@ fn goals(pred: Pred) -> Vec<Condition> {
 
 pub fn problem() -> Problem {
     let size = Size { x: 3, y: 3 };
-    let blacks = vec![(0, 0), (1, 1)];
+    let blacks = vec![(0, 0), (1, 1), (2, 2)];
     let whites = vec![];
     let init = blacks.into_iter().map(|(x, y)| InitPred { pred: Pred::Black, x, y })
         .chain(whites.into_iter().map(|(x, y)| InitPred { pred: Pred::White, x, y }))
