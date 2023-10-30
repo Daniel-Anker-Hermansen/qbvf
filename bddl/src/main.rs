@@ -4,6 +4,8 @@
 
 //use crate::bddl::Problem;
 
+use z3::{Context, Tactic};
+
 mod bddl;
 mod tictac;
 mod solver;
@@ -118,10 +120,14 @@ fn main() {
     dbg!(solver.get_model());
     println!("{:?}", now.elapsed());*/
     let now = std::time::Instant::now();
-    dbg!(solver::solve(&tictac::problem(), &tictac::domain()));
+    let ctx = Context::new(&Default::default());
+    let problem = tictac::problem();
+    let domain = tictac::domain();
+    let f = solver_z3::solve(&problem, &domain);
+    let solver = Tactic::new(&ctx, "simplify").and_then(&Tactic::new(&ctx, "elim-small-bv")).and_then(&Tactic::new(&ctx, "smt")).solver();
+    solver.assert(&f(&ctx));
+    dbg!(solver.check());
+    dbg!(solver.get_model());
     println!("{:?}", now.elapsed());
-
-    let v = parser::condition("black(xmin, ymin)
-                              white(xmin, ?y + 12)");
-    dbg!(&v);
+    dbg!(&solver::solve(&problem, &domain));
 }
