@@ -92,9 +92,9 @@ impl<'ctx> SymbolicBoard<'ctx> {
     }
 
     fn effect(&self, effects: &[Effect<'ctx>], x: &BV<'ctx>, y: &BV<'ctx>, tpe: &BV<'ctx>, solver: &Solver<'ctx>) -> (Bool<'ctx>, Self) {
-        let prefix = format!("_{}", self.prefix);
+        let prefix = format!("_{}_", self.prefix);
         let symbols: Vec<Vec<Dynamic<'ctx>>> = (0..self.size.x)
-            .map(|x| (0..self.size.y).map(|y| Datatype::new_const(&solver.ctx, format!("x{}y{}", x, y), &solver.pred_datatype.sort).into()).collect())
+            .map(|x| (0..self.size.y).map(|y| Datatype::new_const(&solver.ctx, format!("{}x{}y{}", prefix, x, y), &solver.pred_datatype.sort).into()).collect())
             .collect();
         let all = (0..symbols.len()).flat_map(|x| repeat(x).zip(0..symbols[0].len()))
             .map(|(xid, yid)| {
@@ -187,7 +187,7 @@ impl<'ctx> Solver<'ctx> {
                     .map(move |condition| {
                         let x = BV::from_i64(self.ctx, x as _, self.x_sz);
                         let y = BV::from_i64(self.ctx, y as _, self.y_sz);
-                        self.gen_condition(condition, &x, &y, board)
+                        self.gen_condition(condition, &x, &y, board).simplify()
                     })
             })
             .collect();
@@ -208,15 +208,14 @@ impl<'ctx> Solver<'ctx> {
     }
 
     fn solve_black(&'ctx self, board: &SymbolicBoard<'ctx>, depth: u64) -> Bool<'ctx> {
-        dbg!(&depth);
         if depth == 0 {
             return Bool::from_bool(&self.ctx, false);
         }
         let black_actions = &self.domain.black_actions;
         let tpe_sz = usize::BITS - black_actions.len().leading_zeros();
-        let x = BV::new_const(&self.ctx, "h", self.x_sz);
-        let y = BV::new_const(&self.ctx, "i", self.y_sz);
-        let tpe = BV::new_const(&self.ctx, "i", tpe_sz);
+        let x = BV::new_const(&self.ctx, format!("{}x_x", board.prefix), self.x_sz);
+        let y = BV::new_const(&self.ctx, format!("{}y_y", board.prefix), self.y_sz);
+        let tpe = BV::new_const(&self.ctx, format!("{}t_t", board.prefix), tpe_sz);
         let (effect, new_board) = self.effect_action(black_actions, &x, &y, &tpe, &board);
         let valid_bools = black_actions.iter()
             .enumerate()
@@ -227,9 +226,13 @@ impl<'ctx> Solver<'ctx> {
             .collect::<Vec<_>>();
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
         let wins = self.solve_white(&new_board, depth - 1);
-        let goal = self.gen_goals(&self.problem.black_goals, &new_board);
+        let goal = self.gen_goals(&self.problem.black_goals, &new_board).simplify();
         let wins = Bool::or(self.ctx, &[&wins, &goal]);
-        exists_const(&self.ctx, &[&x, &y, &tpe], &[], &Bool::and(self.ctx, &[&effect, &valid, &wins]))
+        let mut vars: Vec<&dyn Ast> = new_board.symbols.iter().flatten().map(|x| -> &dyn Ast { x }).collect();
+        vars.push(&x);
+        vars.push(&y);
+        vars.push(&tpe);
+        exists_const(&self.ctx, &vars, &[], &Bool::and(self.ctx, &[&effect, &valid, &wins]))
     }
     
     fn solve_white(&'ctx self, board: &SymbolicBoard<'ctx>, depth: u64) -> Bool<'ctx> {
@@ -238,9 +241,9 @@ impl<'ctx> Solver<'ctx> {
         }
         let white_actions = &self.domain.white_actions;
         let tpe_sz = usize::BITS - white_actions.len().leading_zeros();
-        let x = BV::new_const(&self.ctx, "h", self.x_sz);
-        let y = BV::new_const(&self.ctx, "i", self.y_sz);
-        let tpe = BV::new_const(&self.ctx, "i", tpe_sz);
+        let x = BV::new_const(&self.ctx, format!("{}x_x", board.prefix), self.x_sz);
+        let y = BV::new_const(&self.ctx, format!("{}y_y", board.prefix), self.y_sz);
+        let tpe = BV::new_const(&self.ctx, format!("{}t_t", board.prefix), tpe_sz);
         let (effect, new_board) = self.effect_action(white_actions, &x, &y, &tpe, &board);
         let valid_bools = white_actions.iter()
             .enumerate()
@@ -250,10 +253,15 @@ impl<'ctx> Solver<'ctx> {
                     .implies(&self.gen_condition(&action.precondition, &x, &y, board)))
             .collect::<Vec<_>>();
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
+        dbg!(effect.simplify());
         let wins = self.solve_black(&new_board, depth - 1);
         let goal = self.gen_goals(&self.problem.white_goals, &new_board);
-        let wins = Bool::or(self.ctx, &[&wins, &goal]);
-        forall_const(&self.ctx, &[&x, &y, &tpe], &[], &Bool::and(self.ctx, &[&effect, &valid, &wins]).not())
+        let wins = Bool::or(self.ctx, &[&wins, &goal.not()]);
+        let mut vars: Vec<&dyn Ast> = new_board.symbols.iter().flatten().map(|x| -> &dyn Ast { x }).collect();
+        vars.push(&x);
+        vars.push(&y);
+        vars.push(&tpe);
+        forall_const(&self.ctx, &vars, &[], &Bool::and(self.ctx, &[&effect, &valid]).implies(&wins))
     }
 }
 
@@ -261,7 +269,7 @@ pub fn solve<'ctx>(problem: &'ctx Problem, domain: &'ctx Domain) -> impl Fn(&'ct
     |ctx| {
         let solver = Solver::new(ctx, problem, domain);
         let (board, cond) = SymbolicBoard::init(&problem.init, problem.size, &solver);
-        let ret = Bool::and(ctx, &[&cond, &solver.solve_black(&board, problem.depth)]);
+        let ret = Bool::and(ctx, &[&cond, &solver.solve_black(&board, problem.depth)]).simplify();
         // This is safe due to the c++ api not following rust rules. Ie this only depends on
         // context. This could be avoided if solver did not store ctx but it was passed around.
         unsafe { std::mem::transmute(ret) }
