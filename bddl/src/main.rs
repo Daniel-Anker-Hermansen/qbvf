@@ -13,7 +13,7 @@ fn main() {
     let problem = tictac::problem();
     let domain = tictac::domain();
     let f = solver_z3::solve(&problem, &domain);
-    let solver = Tactic::new(&ctx, "simplify").and_then(&Tactic::new(&ctx, "elim-small-bv")).and_then(&Tactic::new(&ctx, "smt")).solver();
+    let solver = Tactic::new(&ctx, "simplify").and_then(&Tactic::new(&ctx, "smt")).solver();
     let formula = f(&ctx);
     solver.assert(&formula);
     dbg!(solver.check());

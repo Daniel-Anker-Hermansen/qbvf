@@ -221,7 +221,6 @@ impl<'ctx> Solver<'ctx> {
     }
 
     fn solve_black(&'ctx self, board: &SymbolicBoard<'ctx>, depth: u64) -> Bool<'ctx> {
-        dbg!(&board.prefix);
         if depth == 0 {
             return Bool::from_bool(&self.ctx, false);
         }
@@ -269,7 +268,7 @@ impl<'ctx> Solver<'ctx> {
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
         let wins = self.solve_black(&new_board, depth - 1);
         let goal = self.gen_goals(&self.problem.white_goals, &new_board);
-        let wins = Bool::or(self.ctx, &[&wins, &goal.not()]);
+        let wins = Bool::and(self.ctx, &[&wins, &goal.not()]);
         let mut vars: Vec<&dyn Ast> = new_board.symbols.iter().flatten().map(|x| -> &dyn Ast { x }).collect();
         vars.push(&x);
         vars.push(&y);

@@ -68,7 +68,7 @@ pub fn problem() -> Problem {
     Problem {
         size,
         init,
-        depth: 2,
+        depth: 5,
         white_goals: goals(Pred::White),
         black_goals: goals(Pred::Black),
     }
