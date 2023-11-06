@@ -58,7 +58,17 @@ pub enum E {
 }
 
 impl E {
-    pub fn noramlize(&self, v: i64, max: i64) -> i64 {
+    pub fn noramlize(&self, v: i64, max: i64) -> Option<i64> {
+        match self {
+            E::Add(u) => (v + u < max).then_some(v + u),
+            E::Sub(u) => (v - u >= 0).then_some(v - u),
+            E::Identity => Some(v),
+            E::Min => Some(0),
+            E::Max => Some(max - 1),
+        }
+    }
+    
+    pub fn noramlize_t(&self, v: i64, max: i64) -> i64 {
         match self {
             E::Add(u) => v + u,
             E::Sub(u) => v - u,

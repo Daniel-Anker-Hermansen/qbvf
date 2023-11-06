@@ -51,10 +51,9 @@ impl<'ctx> SymbolicBoard<'ctx> {
         Bool::and(x.get_ctx(), &all.iter().collect::<Vec<_>>())
     }
 
-    //Maybe this can be used for optimization later.
-    //fn static_pred(&self, x: i64, y: i64, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
-    //    self.symbols[x as usize][y as usize]._eq(pred)
-    //}
+    fn static_pred(&self, x: i64, y: i64, pred: &Dynamic<'ctx>) -> Bool<'ctx> {
+        self.symbols[x as usize][y as usize]._eq(pred)
+    }
 
     fn init(initpreds: &[InitPred], size: Size, solver: &'ctx Solver) -> (Self, Bool<'ctx>) {
         let symbols: Vec<Vec<Dynamic<'ctx>>> = (0..size.x)
@@ -172,6 +171,15 @@ impl<'ctx> Solver<'ctx> {
             SubCondition::Not { pred, x_e, y_e } => self.gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y, board).not(),
         }
     }
+    
+    fn const_gen_subcondition(&self, sub_condition: SubCondition, x: i64, y: i64, board: &SymbolicBoard<'ctx>) -> Option<Bool<'ctx>> {
+        match sub_condition {
+            SubCondition::Id { pred, x_e, y_e } => {
+                Some(board.static_pred(x_e.noramlize(x, self.size.x)?, y_e.noramlize(y, self.size.y)?, self.pred_to_z3(pred)))
+            },
+            SubCondition::Not { pred, x_e, y_e } => self.const_gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y, board).as_ref().map(Bool::not),
+        }
+    }
 
     fn gen_condition(&self, condition: &Condition, x: &BV<'ctx>, y: &BV<'ctx>, board: &SymbolicBoard<'ctx>) -> Bool<'ctx> {
         let all = condition.sub_cond.iter()
@@ -180,14 +188,19 @@ impl<'ctx> Solver<'ctx> {
         Bool::and(self.ctx, &all.iter().collect::<Vec<&Bool<'ctx>>>())
     }
 
+    fn const_gen_condition(&self, condition: &Condition, x: i64, y: i64, board: &SymbolicBoard<'ctx>) -> Option<Bool<'ctx>> {
+        let all = condition.sub_cond.iter()
+            .map(|sub_condition| self.const_gen_subcondition(*sub_condition, x, y, board))
+            .collect::<Option<Vec<Bool<'ctx>>>>()?;
+        Some(Bool::and(self.ctx, &all.iter().collect::<Vec<&Bool<'ctx>>>()))
+    }
+
     fn gen_goals(&self, goals: &[Condition], board: &SymbolicBoard<'ctx>) -> Bool<'ctx> {
         let ors: Vec<_> = (0..self.size.x).flat_map(|x| repeat(x).zip(0..self.size.y))
             .flat_map(|(x, y)| {
                 goals.iter()
-                    .map(move |condition| {
-                        let x = BV::from_i64(self.ctx, x as _, self.x_sz);
-                        let y = BV::from_i64(self.ctx, y as _, self.y_sz);
-                        self.gen_condition(condition, &x, &y, board).simplify()
+                    .filter_map(move |condition| {
+                        self.const_gen_condition(condition, x, y, board)
                     })
             })
             .collect();
@@ -208,6 +221,7 @@ impl<'ctx> Solver<'ctx> {
     }
 
     fn solve_black(&'ctx self, board: &SymbolicBoard<'ctx>, depth: u64) -> Bool<'ctx> {
+        dbg!(&board.prefix);
         if depth == 0 {
             return Bool::from_bool(&self.ctx, false);
         }
@@ -253,7 +267,6 @@ impl<'ctx> Solver<'ctx> {
                     .implies(&self.gen_condition(&action.precondition, &x, &y, board)))
             .collect::<Vec<_>>();
         let valid = Bool::and(self.ctx, &valid_bools.iter().collect::<Vec<_>>());
-        dbg!(effect.simplify());
         let wins = self.solve_black(&new_board, depth - 1);
         let goal = self.gen_goals(&self.problem.white_goals, &new_board);
         let wins = Bool::or(self.ctx, &[&wins, &goal.not()]);

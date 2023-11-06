@@ -24,8 +24,8 @@ impl Board {
     fn assert_condition(&self, condition: &Condition, x: i64, y: i64) -> bool {
         condition.sub_cond.iter().all(|cond| {
             match cond {
-                SubCondition::Id { pred, x_e, y_e } => self.assert_pred(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
-                SubCondition::Not { pred, x_e, y_e } => self.assert_not_pred(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
+                SubCondition::Id { pred, x_e, y_e } => self.assert_pred(x_e.noramlize_t(x, self.size.x), y_e.noramlize_t(y, self.size.y), *pred),
+                SubCondition::Not { pred, x_e, y_e } => self.assert_not_pred(x_e.noramlize_t(x, self.size.x), y_e.noramlize_t(y, self.size.y), *pred),
             }
         })
     }
@@ -33,7 +33,7 @@ impl Board {
     fn effect_conditon(&mut self, condition: &Condition, x: i64, y: i64) {
         condition.sub_cond.iter().for_each(|cond| {
             match cond {
-                SubCondition::Id { pred, x_e, y_e } => self.effect(x_e.noramlize(x, self.size.x), y_e.noramlize(y, self.size.y), *pred),
+                SubCondition::Id { pred, x_e, y_e } => self.effect(x_e.noramlize_t(x, self.size.x), y_e.noramlize_t(y, self.size.y), *pred),
                 SubCondition::Not { .. } => panic!("Cannot use not subcondition in effect"), 
             };
         })
