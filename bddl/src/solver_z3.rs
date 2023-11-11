@@ -16,6 +16,7 @@ fn e_to_bv<'ctx>(e: &E, x: &BV<'ctx>, sz: i64) -> BV<'ctx> {
     match e {
         E::Add(o) => x + BV::from_i64(x.get_ctx(), *o, x.get_size()),
         E::Sub(o) => x - BV::from_i64(x.get_ctx(), *o, x.get_size()),
+        E::Int(o) => BV::from_i64(x.get_ctx(), *o, x.get_size()),
         E::Identity => x.clone(),
         E::Min => BV::from_i64(x.get_ctx(), 0, x.get_size()),
         E::Max => BV::from_i64(x.get_ctx(), sz - 1, x.get_size()),

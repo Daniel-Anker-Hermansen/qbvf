@@ -1,0 +1,106 @@
+use super::bddl::*;
+use super::lexer::Token;
+
+grammar;
+
+pub Domain: Domain = {
+    hash black_actions <black_actions:Action*> hash white_actions <white_actions:Action*> => Domain { black_actions, white_actions },
+}
+
+Action: Action = {
+    colon action <name:ident>
+    colon parameters lparen question_mark x comma question_mark y rparen
+    colon precondition <precondition:Condition>
+    colon effect <effect:Condition> => Action { name, precondition, effect },
+}
+
+Condition: Condition = {
+    lparen <sub_cond:SubCondition*> rparen => Condition { sub_cond },
+}
+
+SubCondition: SubCondition = {
+    <pred:Pred> lparen <x_e:E1> comma <y_e:E2> rparen => SubCondition::Id { pred, x_e, y_e },
+    not <pred:Pred> lparen <x_e:E1> comma <y_e:E2> rparen => SubCondition::Not { pred, x_e, y_e },
+}
+
+Pred: Pred = {
+    open => Pred::Open,
+    white => Pred::White,
+    black => Pred::Black,
+}
+
+E<C, Min, Max>: E = {
+    question_mark C => E::Identity,
+    question_mark C plus <i:int> => E::Add(i),
+    question_mark C minus <i:int> => E::Sub(i),
+    Min => E::Min,
+    Max => E::Max,
+    <i:int> => E::Int(i),
+}
+
+E1 = E<x, xmin, xmax>;
+E2 = E<y, ymin, ymax>;
+
+pub Problem: Problem = {
+    <size:Size> <init:Init> hash depth <depth:int> <black_goals:BlackGoals> <white_goals:WhiteGoals> => Problem { size, init, depth: depth as u64, black_goals, white_goals},
+}
+
+Size: Size = {
+    hash boardsize <x:int> <y:int> => Size { x, y },
+}
+
+Init: Vec<InitPred> = {
+    hash init lparen <v:InitPred*> rparen => v,
+}
+
+InitPred: InitPred = {
+    <pred:Pred> lparen <x:int> comma <y:int> rparen => InitPred { pred, x, y },
+}
+
+WhiteGoals: Vec<Condition> = {
+    hash white_goals <v:Condition*> => v,
+}
+
+BlackGoals: Vec<Condition> = {
+    hash black_goals <v:Condition*> => v,
+}
+
+extern {
+    type Error = ();
+
+    enum Token {
+        minus => Token::Minus,
+        plus => Token::Plus,
+        lparen => Token::Lparen,
+        rparen => Token::Rparen,
+        hash => Token::Hash,
+        colon => Token::Colon,
+        comma => Token::Comma,
+        question_mark => Token::QuestionMark,
+
+        black_actions => Token::BlackActions,
+        white_actions => Token::WhiteActions,
+        action => Token::Action,
+        parameters => Token::Parameters,
+        precondition => Token::Precondition,
+        open => Token::Open,
+        white => Token::White,
+        black => Token::Black,
+        x => Token::X,
+        y => Token::Y,
+        xmin => Token::Xmin,
+        xmax => Token::Xmax,
+        ymin => Token::Ymin,
+        ymax => Token::Ymax,
+        boardsize => Token::Boardsize,
+        init => Token::Init,
+        depth => Token::Depth,
+        black_goals => Token::BlackGoals,
+        white_goals => Token::WhiteGoals,
+        effect => Token::Effect,
+        not => Token::Not,
+        
+        int => Token::Int(<i64>),
+        ident => Token::String(<String>),
+    }
+}
