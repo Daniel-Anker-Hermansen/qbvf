@@ -12,8 +12,10 @@ mod lexer;
 lalrpop_mod!(parser);
 
 fn main() {
-    let problem = parse_problem(include_str!("ttt.problem"));
-    let domain = parse_domain(include_str!("ttt.domain"));
+    let problem = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
+    let domain = std::fs::read_to_string(std::env::args().nth(2).unwrap()).unwrap();
+    let problem = parse_problem(&problem);
+    let domain = parse_domain(&domain);
     let now = std::time::Instant::now();
     let ctx = Context::new(&Default::default());
     let f = solver_z3::solve(&problem, &domain);
