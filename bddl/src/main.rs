@@ -1,17 +1,32 @@
+#![feature(slice_group_by)]
+
 use bddl::{Domain, Problem};
 use lalrpop_util::lalrpop_mod;
 use logos::Logos;
 use z3::{Context, Tactic};
 
+use crate::qbf::{atom, display_tseitin, qdimacs};
+
 mod bddl;
 mod solver;
 mod solver_z3;
 mod lexer;
-//mod parser;
+mod qbf;
 
 lalrpop_mod!(parser);
 
 fn main() {
+    let a = atom();
+    let b = atom();
+    let form = a.exists(b.forall((!!a).ite(!!b, !b)));
+    eprintln!("{}", form);
+    eprintln!("{}", form.clone().denegify());
+    eprintln!("{}", form.clone().denegify().prenexify());
+    let (a, b) = form.denegify().prenexify().prenex_to_prenex_cnf();
+    eprintln!("{}", display_tseitin(&a, &b));
+    println!("{}", qdimacs(&a, &b));
+    return;
+
     let problem = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
     let domain = std::fs::read_to_string(std::env::args().nth(2).unwrap()).unwrap();
     let problem = parse_problem(&problem);
