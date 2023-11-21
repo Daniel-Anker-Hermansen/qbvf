@@ -19,8 +19,8 @@ fn main() {
     let a = atom();
     let b = atom();
     let form = a.exists(b.forall((!!a).ite(!!b, !b)));
-    let bv = BitVector::new(4);
-    let form = bv.exists(bv.equal(5) & bv.le(5));
+    let bv = BitVector::new(32);
+    let form = bv.forall(bv.le(1000).implies(bv.equal(1000) | bv.le(998)));
     eprintln!("{}", form);
     eprintln!("{}", form.clone().denegify());
     eprintln!("{}", form.clone().denegify().prenexify());

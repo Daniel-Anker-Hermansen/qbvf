@@ -211,34 +211,42 @@ impl Formula {
                 v.prenex_cnf_inner(acc)
             },
             _ => {
-                let (a, mut matrix) = self.tseitin();
+                let (a, mut matrix) = self.tseitin(acc);
                 matrix.push(vec![a]);
                 matrix
             }
         }
     } 
 
-    fn tseitin(&self) -> (Atom, Vec<Vec<Atom>>) {
+    fn tseitin(&self, low: &mut Vec<(Quantifier, Atom)>) -> (Atom, Vec<Vec<Atom>>) {
         match self {
             Formula::Atom(v) => (*v, vec![]),
             Formula::And(a, b) => {
-                let (aa, mut at) = a.tseitin();
-                let (ba, bt) = b.tseitin();
+                let (aa, mut at) = a.tseitin(low);
+                let (ba, bt) = b.tseitin(low);
                 at.extend(bt);
                 let ca = atom();
+                low.push((Quantifier::Exists, ca));
                 at.push(vec![ca, aa.invert(), ba.invert()]);
                 at.push(vec![aa, ca.invert()]);
                 at.push(vec![ba, ca.invert()]);
+                eprintln!("-----\nf{}\nf{} {} {}", self, ca, aa.invert(), ba.invert());
+                eprintln!("f{} {}", ca.invert(), ba);
+                eprintln!("f{} {}", ca.invert(), aa);
                 (ca, at)
             },
             Formula::Or(a, b) => {
-                let (aa, mut at) = a.tseitin();
-                let (ba, bt) = b.tseitin();
+                let (aa, mut at) = a.tseitin(low);
+                let (ba, bt) = b.tseitin(low);
                 at.extend(bt);
                 let ca = atom();
+                low.push((Quantifier::Exists, ca));
                 at.push(vec![ca.invert(), aa, ba]);
                 at.push(vec![aa.invert(), ca]);
                 at.push(vec![ba.invert(), ca]);
+                eprintln!("-----\nf{}\nf{} {} {}", self, ca.invert(), aa, ba);
+                eprintln!("f{} {}", ca, ba.invert());
+                eprintln!("f{} {}", ca, aa.invert());
                 (ca, at)
             }
             _ => panic!("Disallowed in tseitin")
@@ -271,7 +279,7 @@ impl Not for Formula {
 }
 
 pub struct BitVector {
-    bits: Vec<Atom>,
+    pub bits: Vec<Atom>,
 }
 
 impl BitVector {
