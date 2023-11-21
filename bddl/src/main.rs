@@ -5,7 +5,7 @@ use lalrpop_util::lalrpop_mod;
 use logos::Logos;
 use z3::{Context, Tactic};
 
-use crate::qbf::{atom, display_tseitin, qdimacs};
+use crate::qbf::{atom, display_tseitin, qdimacs, BitVector};
 
 mod bddl;
 mod solver;
@@ -19,6 +19,8 @@ fn main() {
     let a = atom();
     let b = atom();
     let form = a.exists(b.forall((!!a).ite(!!b, !b)));
+    let bv = BitVector::new(4);
+    let form = bv.exists(bv.equal(5) & bv.le(5));
     eprintln!("{}", form);
     eprintln!("{}", form.clone().denegify());
     eprintln!("{}", form.clone().denegify().prenexify());

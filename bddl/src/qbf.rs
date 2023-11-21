@@ -1,4 +1,4 @@
-use std::{ops::{BitOr, BitAnd, Not}, cell::Cell, fmt::{Display, Write}, collections::HashMap};
+use std::{ops::{BitOr, BitAnd, Not}, cell::Cell, fmt::{Display, Write}, collections::HashMap, iter::repeat_with};
 
 thread_local! {
     static COUNT: Cell<i64> = Cell::new(0);
@@ -31,6 +31,10 @@ impl Atom {
 
     pub fn invert(self) -> Self {
         Atom(-self.0)
+    }
+
+    pub fn equal(self, other: Self) -> Formula {
+        !!self & !!other | !self & !other
     }
 }
 
@@ -263,5 +267,59 @@ impl Not for Formula {
 
     fn not(self) -> Self::Output {
         Self::Not(Box::new(self))
+    }
+}
+
+pub struct BitVector {
+    bits: Vec<Atom>,
+}
+
+impl BitVector {
+    #[track_caller]
+    pub fn new(size: usize) -> Self {
+        assert!(size > 0, "size must be positive");
+        Self { bits: repeat_with(atom).take(size).collect() }
+    }
+
+    pub fn exists(&self, other: Formula) -> Formula {
+        self.bits.iter().fold(other, |other, atom| atom.exists(other))
+    }
+    
+    pub fn forall(&self, other: Formula) -> Formula {
+        self.bits.iter().fold(other, |other, atom| atom.forall(other))
+    }
+
+    #[track_caller]
+    pub fn equal(&self, mut val: u64) -> Formula {
+        assert!(1 << self.bits.len() > val, "value overflowed bitsize");
+        self.bits.iter().map(|atom| {
+                let bit = val & 1 == 1;
+                val >>= 1;
+                if bit { !!*atom } else { !*atom }
+            })
+            .reduce(|a, b| a & b)
+            .expect("bitvector is never empty")
+    }
+
+    #[track_caller]
+    pub fn le(&self, val: u64) -> Formula {
+        assert!(1 << self.bits.len() > val, "value overflowed bitsize");
+        let mut form = if val & 1 == 1 {
+            !!self.bits[0] | !self.bits[0]
+        }
+        else {
+            !self.bits[0]
+        };
+        for shift in 1..self.bits.len() {
+            let bit = (val >> shift) & 1 == 1;
+            form = if bit {
+                !self.bits[shift] | !!self.bits[shift] & form
+            }
+            else {
+                !self.bits[shift] & form
+            };
+        }
+        dbg!(&form);
+        form
     }
 }
