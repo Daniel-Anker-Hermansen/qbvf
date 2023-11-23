@@ -10,6 +10,7 @@ use crate::qbf::{atom, display_tseitin, qdimacs, BitVector};
 mod bddl;
 mod solver;
 mod solver_z3;
+mod solver_qbf;
 mod lexer;
 mod qbf;
 
@@ -20,7 +21,7 @@ fn main() {
     let b = atom();
     let form = a.exists(b.forall((!!a).ite(!!b, !b)));
     let bv = BitVector::new(32);
-    let form = bv.forall(bv.le(1000).implies(bv.equal(1000) | bv.le(998)));
+    let form = bv.forall(bv.ge(1000).implies(!bv.le(999)));
     eprintln!("{}", form);
     eprintln!("{}", form.clone().denegify());
     eprintln!("{}", form.clone().denegify().prenexify());

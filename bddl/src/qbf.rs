@@ -230,9 +230,6 @@ impl Formula {
                 at.push(vec![ca, aa.invert(), ba.invert()]);
                 at.push(vec![aa, ca.invert()]);
                 at.push(vec![ba, ca.invert()]);
-                eprintln!("-----\nf{}\nf{} {} {}", self, ca, aa.invert(), ba.invert());
-                eprintln!("f{} {}", ca.invert(), ba);
-                eprintln!("f{} {}", ca.invert(), aa);
                 (ca, at)
             },
             Formula::Or(a, b) => {
@@ -244,9 +241,6 @@ impl Formula {
                 at.push(vec![ca.invert(), aa, ba]);
                 at.push(vec![aa.invert(), ca]);
                 at.push(vec![ba.invert(), ca]);
-                eprintln!("-----\nf{}\nf{} {} {}", self, ca.invert(), aa, ba);
-                eprintln!("f{} {}", ca, ba.invert());
-                eprintln!("f{} {}", ca, aa.invert());
                 (ca, at)
             }
             _ => panic!("Disallowed in tseitin")
@@ -327,7 +321,27 @@ impl BitVector {
                 !self.bits[shift] & form
             };
         }
-        dbg!(&form);
+        form
+    }
+    
+    #[track_caller]
+    pub fn ge(&self, val: u64) -> Formula {
+        assert!(1 << self.bits.len() > val, "value overflowed bitsize");
+        let mut form = if val & 1 == 1 {
+            !!self.bits[0]
+        }
+        else {
+            !!self.bits[0] | !self.bits[0]
+        };
+        for shift in 1..self.bits.len() {
+            let bit = (val >> shift) & 1 == 1;
+            form = if bit {
+                !!self.bits[shift] & form
+            }
+            else {
+                !!self.bits[shift] | !self.bits[shift] & form
+            };
+        }
         form
     }
 }
