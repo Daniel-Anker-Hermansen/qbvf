@@ -1,4 +1,4 @@
-use std::{ops::{BitOr, BitAnd, Not}, cell::Cell, fmt::{Display, Write}, collections::HashMap, iter::repeat_with};
+use std::{ops::{BitOr, BitAnd, Not}, cell::Cell, fmt::{Display, Write}, collections::HashMap, iter::repeat_with, process::Stdio, io::Write as _};
 
 thread_local! {
     static COUNT: Cell<i64> = Cell::new(0);
@@ -245,6 +245,20 @@ impl Formula {
             }
             _ => panic!("Disallowed in tseitin")
         }
+    }
+
+    pub fn check(self) -> bool {
+        let (atoms, clauses) = self.denegify().prenexify().prenex_to_prenex_cnf();
+        let cnf = qdimacs(&atoms, &clauses);
+        let mut depqbf = std::process::Command::new("depqbf")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .spawn()
+            .unwrap();
+        let stdin = depqbf.stdin.as_mut().unwrap();
+        stdin.write_all(cnf.as_bytes()).unwrap();
+        let exit = depqbf.wait().unwrap();
+        exit.code() == Some(10)
     }
 }
 

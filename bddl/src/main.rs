@@ -4,8 +4,6 @@ use bddl::{Domain, Problem};
 use lalrpop_util::lalrpop_mod;
 use logos::Logos;
 
-use crate::qbf::qdimacs;
-
 mod bddl;
 mod solver;
 mod solver_z3;
@@ -21,9 +19,7 @@ fn main() {
     let problem = parse_problem(&problem);
     let domain = parse_domain(&domain);
     let formula = solver_qbf::solve(problem, domain);
-    eprintln!("{}", formula);
-    let tceicin = formula.denegify().prenexify().prenex_to_prenex_cnf();
-    println!("{}", qdimacs(&tceicin.0, &tceicin.1));
+    println!("{}", formula.check());
 }
 
 fn parse_domain(src: &str) -> Domain {
