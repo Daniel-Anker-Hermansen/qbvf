@@ -25,11 +25,11 @@ pub fn solve(problem: Problem, domain: Domain) -> Formula {
 
 impl Context {
     fn gen_bounds_check(&self, e: &E, v: &BitVector, max: u64) -> Formula {
-        match e {
+        v.ge(0) & v.le(max - 1) & match e {
             &E::Add(i) => v.le(max - i as u64 - 1),
             &E::Sub(i) => v.ge(i as u64),
             _ => !!self.truth,
-        }
+        } 
     }
 
     fn gen_e_bv_eq(&self, e: &E, v: &BitVector, target: u64, max: u64) -> Formula {
@@ -56,10 +56,16 @@ impl Context {
             SubCondition::Id { pred, x_e, y_e } => {
                 let x_bound = self.gen_bounds_check(&x_e, x, self.size.x as u64);
                 let y_bound = self.gen_bounds_check(&y_e, y, self.size.y as u64);
-                let pred_assert = self.board.gen_pred(self, x, y, pred);
+                let pred_assert = self.board.gen_pred(self, x, &x_e, y, &y_e, pred);
                 x_bound & y_bound & pred_assert
             },
-            SubCondition::Not { pred, x_e, y_e } => !self.gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y),
+            SubCondition::Not { pred, x_e, y_e } => {
+                let x_bound = self.gen_bounds_check(&x_e, x, self.size.x as u64);
+                let y_bound = self.gen_bounds_check(&y_e, y, self.size.y as u64);
+                let pred_assert = self.board.gen_pred(self, x, &x_e, y, &y_e, pred);
+                x_bound & y_bound & !pred_assert
+            },
+
         }
     }
 
@@ -113,9 +119,9 @@ impl Context {
             .reduce(|a, b| a & b)
             .unwrap_or(!!self.truth);
         let previous = std::mem::replace(&mut self.board, new_board);
-        let new_board = std::mem::replace(&mut self.board, previous);
-        let wins = self.solve_white(depth - 1);
         let goal = self.gen_goals(&self.problem.black_goals);
+        let wins = self.solve_white(depth - 1);
+        let new_board = std::mem::replace(&mut self.board, previous);
         new_board.exists(x.exists(y.exists(tpe.exists(effect & valid & (wins | goal)))))
     }
 
@@ -138,9 +144,9 @@ impl Context {
             .reduce(|a, b| a & b)
             .unwrap_or(!!self.truth);
         let previous = std::mem::replace(&mut self.board, new_board);
-        let new_board = std::mem::replace(&mut self.board, previous);
-        let wins = self.solve_white(depth - 1);
         let goal = self.gen_goals(&self.problem.black_goals);
+        let wins = self.solve_black(depth - 1);
+        let new_board = std::mem::replace(&mut self.board, previous);
         new_board.forall(x.forall(y.forall(tpe.forall((effect & valid).implies(wins | goal)))))
     }
 }
@@ -163,12 +169,24 @@ fn tuple_eq(a: (Atom, Atom), b: (Atom, Atom)) -> Formula {
     a.0.equal(b.0) & a.1.equal(b.1)
 }
 
+// Assumes bounds checks have been done. Causes garbage if not the case
+fn e_eq(context: &Context, bv: &BitVector, e: &E, value: u64, max: i64) -> Formula {
+    match e {
+        E::Add(v) => bv.equal(value.saturating_sub(*v as u64)),
+        E::Sub(v) => bv.equal((value + *v as u64).min(max as u64 - 1)),
+        E::Int(v) => if value == *v as u64 { !!context.truth } else  { !context.truth },
+        E::Identity => bv.equal(value),
+        E::Min => if value == 0 { !!context.truth } else  { !context.truth },
+        E::Max => if value == max as u64 - 1 { !!context.truth } else { !context.truth },
+    }
+}
+
 impl SymbolicBoard {
-    fn gen_pred(&self, context: &Context, x: &BitVector, y: &BitVector, pred: Pred) -> Formula {
+    fn gen_pred(&self, context: &Context, x: &BitVector, x_e: &E, y: &BitVector, y_e: &E, pred: Pred) -> Formula {
         let (o, b) = context.pred_to_atoms(pred);
         (0..self.size.x as usize).flat_map(|x| repeat(x).zip(0..self.size.y as usize))
             .map(|(xi, yi)| 
-                 (x.equal(xi as u64) & y.equal(yi as u64))
+                 (e_eq(context, x, x_e, xi as u64, self.size.x) & e_eq(context, y, y_e, yi as u64, self.size.y))
                     .implies(o.equal(self.symbols[xi][yi].0) & b.equal(self.symbols[xi][yi].1)))
             .reduce(|a, b| a & b)
             .expect("board size is not zero")
