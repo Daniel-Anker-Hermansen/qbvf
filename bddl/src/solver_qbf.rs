@@ -29,7 +29,7 @@ impl Context {
     fn gen_bounds_check(&self, e: &E, v: &BitVector, max: u64) -> Formula {
         v.ge(0) & v.le(max - 1) & match e {
             &E::Add(i) => v.le(max - i as u64 - 1),
-            &E::Sub(i) => v.ge(i as u64),
+            &E::Sub(i) => v.ge(i as u64) & v.le(max - 1),
             _ => !!self.truth,
         } 
     }
@@ -178,7 +178,7 @@ impl Context {
         let goal = if self.flatten { self.gen_static_goals(&self.problem.white_goals) } else { self.gen_goals(&self.problem.white_goals) };
         let wins = self.solve_black(depth - 1);
         let new_board = std::mem::replace(&mut self.board, previous);
-        new_board.forall(x.forall(y.forall(tpe.forall((effect & valid).implies(wins | goal)))))
+        new_board.forall(x.forall(y.forall(tpe.forall(((effect & valid) | !self.truth).implies(wins & !goal)))))
     }
 }
 
@@ -200,24 +200,12 @@ fn tuple_eq(a: (Atom, Atom), b: (Atom, Atom)) -> Formula {
     a.0.equal(b.0) & a.1.equal(b.1)
 }
 
-// Assumes bounds checks have been done. Causes garbage if not the case
-fn e_eq(context: &Context, bv: &BitVector, e: &E, value: u64, max: i64) -> Formula {
-    match e {
-        E::Add(v) => bv.equal(value.saturating_sub(*v as u64)),
-        E::Sub(v) => bv.equal((value + *v as u64).min(max as u64 - 1)),
-        E::Int(v) => if value == *v as u64 { !!context.truth } else  { !context.truth },
-        E::Identity => bv.equal(value),
-        E::Min => if value == 0 { !!context.truth } else  { !context.truth },
-        E::Max => if value == max as u64 - 1 { !!context.truth } else { !context.truth },
-    }
-}
-
 impl SymbolicBoard {
     fn gen_pred(&self, context: &Context, x: &BitVector, x_e: &E, y: &BitVector, y_e: &E, pred: Pred) -> Formula {
         let (o, b) = context.pred_to_atoms(pred);
         (0..self.size.x as usize).flat_map(|x| repeat(x).zip(0..self.size.y as usize))
             .map(|(xi, yi)| 
-                 (e_eq(context, x, x_e, xi as u64, self.size.x) & e_eq(context, y, y_e, yi as u64, self.size.y))
+                 (context.gen_e_bv_eq(x_e, x, xi as u64, self.size.x as u64) & context.gen_e_bv_eq(y_e, y, yi as u64, self.size.y as u64))
                     .implies(o.equal(self.symbols[xi][yi].0) & b.equal(self.symbols[xi][yi].1)))
             .reduce(|a, b| a & b)
             .expect("board size is not zero")
