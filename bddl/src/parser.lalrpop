@@ -20,7 +20,7 @@ Condition: Condition = {
 
 SubCondition: SubCondition = {
     <pred:Pred> lparen <x_e:E1> comma <y_e:E2> rparen => SubCondition::Id { pred, x_e, y_e },
-    not <pred:Pred> lparen <x_e:E1> comma <y_e:E2> rparen => SubCondition::Not { pred, x_e, y_e },
+    not lparen <pred:Pred> lparen <x_e:E1> comma <y_e:E2> rparen rparen => SubCondition::Not { pred, x_e, y_e },
 }
 
 Pred: Pred = {

@@ -3,6 +3,7 @@
 use bddl::{Domain, Problem};
 use lalrpop_util::lalrpop_mod;
 use logos::Logos;
+use z3::{Context, Tactic};
 
 mod bddl;
 mod solver;
@@ -28,7 +29,13 @@ fn main() {
     println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
-    dbg!(solver::solve(&problem, &domain));
+    let now = std::time::Instant::now();
+    let context = Context::new(&Default::default());
+    let z3 = solver_z3::solve(&problem, &domain);
+    let formula = z3(&context);
+    let solver = Tactic::new(&context, "simplify").and_then(&Tactic::new(&context, "smt")).solver();
+    solver.assert(&formula);
+    println!("{:?}: {:?}", solver.check(), now.elapsed());
 }
 
 fn parse_domain(src: &str) -> Domain {

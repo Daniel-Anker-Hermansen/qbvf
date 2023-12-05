@@ -1,0 +1,7 @@
+ttt:
+    without flattening, flattening, z3, q-sage
+1:  0.37s   0.12s   0.04s   0.59s
+3:  1.81s   0.87s   0.02s   0.96s
+5:  4.10s   1.59s   28.22s  10.47s
+7:  25.67s  876s    ???     196s
+
