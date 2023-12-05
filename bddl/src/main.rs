@@ -20,13 +20,13 @@ fn main() {
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
     let now = std::time::Instant::now();
-    let formula = solver_qbf::solve(problem, domain, false);
-    println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
+    //let formula = solver_qbf::solve(problem, domain, false);
+    //println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
     let now = std::time::Instant::now();
-    let formula = solver_qbf::solve(problem, domain, true);
-    println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
+    //let formula = solver_qbf::solve(problem, domain, true);
+    //println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
     let now = std::time::Instant::now();

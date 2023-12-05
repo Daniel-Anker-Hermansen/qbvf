@@ -169,7 +169,10 @@ impl<'ctx> Solver<'ctx> {
                 let bounds = gen_coor_bounds(&x_e, &y_e, self.size, x, y);
                 Bool::and(self.ctx, &[&self.gen_pred_assert(&e_to_bv(&x_e, x, self.size.x), &e_to_bv(&y_e, y, self.size.y), pred, board), &bounds])
             },
-            SubCondition::Not { pred, x_e, y_e } => self.gen_subcondition(SubCondition::Id { pred, x_e, y_e }, x, y, board).not(),
+            SubCondition::Not { pred, x_e, y_e } => {
+                let bounds = gen_coor_bounds(&x_e, &y_e, self.size, x, y);
+                Bool::and(self.ctx, &[&self.gen_pred_assert(&e_to_bv(&x_e, x, self.size.x), &e_to_bv(&y_e, y, self.size.y), pred, board).not(), &bounds])
+            },
         }
     }
     
