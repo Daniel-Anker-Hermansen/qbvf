@@ -17,16 +17,14 @@ lalrpop_mod!(parser);
 fn main() {
     let sproblem = std::fs::read_to_string(std::env::args().nth(1).unwrap()).unwrap();
     let sdomain = std::fs::read_to_string(std::env::args().nth(2).unwrap()).unwrap();
+    /*let problem = parse_problem(&sproblem);
+    let domain = parse_domain(&sdomain);
+    let now = std::time::Instant::now();
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
     let now = std::time::Instant::now();
-    //let formula = solver_qbf::solve(problem, domain, false);
-    //println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
-    let problem = parse_problem(&sproblem);
-    let domain = parse_domain(&sdomain);
-    let now = std::time::Instant::now();
-    //let formula = solver_qbf::solve(problem, domain, true);
-    //println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());
+    let formula = solver_qbf::solve(problem, domain, true);
+    println!("{}: {:?}", formula.check_with_preprocessing(), now.elapsed());*/
     let problem = parse_problem(&sproblem);
     let domain = parse_domain(&sdomain);
     let now = std::time::Instant::now();
